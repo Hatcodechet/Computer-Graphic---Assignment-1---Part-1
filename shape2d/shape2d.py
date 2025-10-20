@@ -117,26 +117,27 @@ class Hexagon2D(Shape2DBase):
 # ⚪ CIRCLE (FIXED)
 # ============================================================
 class Circle2D(Shape2DBase):
-    def __init__(self, vert_shader, frag_shader, render_mode="Flat"):
-        n, r = 120, 0.5
+    def __init__(self, vert_shader, frag_shader, render_mode="Flat", radius=0.5):
+        n = 120
+        r = radius
         vertices = np.array([[0, 0, 0]] + [[r*cos(2*pi*i/n), r*sin(2*pi*i/n), 0] for i in range(n)])
-        # FIX: Thêm triangle cuối cùng để đóng hình tròn
         indices = np.concatenate([[0, i, i+1] for i in range(1, n)] + [[0, n, 1]])
         colors = np.random.rand(n+1, 3)
         super().__init__(vertices, indices, colors, render_mode)
+
 
 
 # ============================================================
 # 🟣 ELLIPSE (FIXED)
 # ============================================================
 class Ellipse2D(Shape2DBase):
-    def __init__(self, vert_shader, frag_shader, render_mode="Flat"):
-        n, a, b = 60, 0.6, 0.4
+    def __init__(self, vert_shader, frag_shader, render_mode="Flat", a=0.6, b=0.4):
+        n = 60
         vertices = np.array([[0, 0, 0]] + [[a*cos(2*pi*i/n), b*sin(2*pi*i/n), 0] for i in range(n)])
-        # FIX: Thêm triangle cuối cùng để đóng hình ellipse
         indices = np.concatenate([[0, i, i+1] for i in range(1, n)] + [[0, n, 1]])
         colors = np.random.rand(n+1, 3)
         super().__init__(vertices, indices, colors, render_mode)
+
 
 
 # ============================================================
@@ -157,30 +158,17 @@ class Trapezoid2D(Shape2DBase):
 # ⭐ STAR (FIXED - Proper center-based triangulation)
 # ============================================================
 class Star2D(Shape2DBase):
-    def __init__(self, vert_shader, frag_shader, render_mode="Flat"):
-        n, R, r = 5, 0.5, 0.2
-        
-        # Tạo tâm điểm ở giữa
-        vertices = [[0, 0, 0]]  # Center point
-        
-        # Tạo các điểm ngoài và trong
+    def __init__(self, vert_shader, frag_shader, render_mode="Flat", n=5, R=0.5, r=0.2):
+        vertices = [[0, 0, 0]]
         for i in range(2*n):
-            ang = i*pi/n - pi/2  # -pi/2 để ngôi sao hướng lên
-            radius = R if i%2==0 else r
+            ang = i*pi/n - pi/2
+            radius = R if i % 2 == 0 else r
             vertices.append([radius*cos(ang), radius*sin(ang), 0])
-        
         vertices = np.array(vertices)
-        
-        # Tạo indices từ tâm ra các cạnh
-        indices = []
-        for i in range(1, 2*n):
-            indices.extend([0, i, i+1])
-        # Đóng hình: nối vertex cuối với vertex đầu
-        indices.extend([0, 2*n, 1])
-        
-        indices = np.array(indices)
+        indices = np.concatenate([[0, i, i+1] for i in range(1, 2*n)] + [[0, 2*n, 1]])
         colors = np.random.rand(len(vertices), 3)
         super().__init__(vertices, indices, colors, render_mode)
+
 
 
 # ============================================================
@@ -194,4 +182,11 @@ class Arrow2D(Shape2DBase):
         ])
         indices = np.array([0,1,5, 0,5,6, 1,2,4, 4,5,1, 2,3,4])
         colors = np.random.rand(len(vertices), 3)
+        super().__init__(vertices, indices, colors, render_mode)
+
+class RegularPolygon2D(Shape2DBase):
+    def __init__(self, vert_shader, frag_shader, render_mode="Flat", n=6, r=0.5):
+        vertices = np.array([[r * np.cos(2*np.pi*i/n), r * np.sin(2*np.pi*i/n), 0] for i in range(n)])
+        indices = np.concatenate([[0, i, (i+1) % n] for i in range(1, n-1)])
+        colors = np.random.rand(n, 3)
         super().__init__(vertices, indices, colors, render_mode)

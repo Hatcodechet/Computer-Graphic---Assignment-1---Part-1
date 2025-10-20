@@ -15,7 +15,7 @@ class UIState:
         self.render_mode_idx = 0
 
         # Chỉ 2D shapes
-        self.shapes_2d = [
+        self.shapes_2d = [  
             "Triangle2D", "Rectangle2D", "Pentagon2D", "Hexagon2D",
             "Circle2D", "Ellipse2D", "Trapezoid2D", "Star2D", "Arrow2D"
         ]
@@ -30,6 +30,17 @@ class UIState:
 
         #color
         self.color = [1.0, 1.0, 1.0]
+
+        # --- Parameters for 2D shapes ---
+        self.circle_radius = 0.5
+        self.ellipse_a = 0.6
+        self.ellipse_b = 0.4
+        self.polygon_sides = 6
+        self.polygon_radius = 0.5
+        self.star_points = 5
+        self.star_outer = 0.5
+        self.star_inner = 0.2
+
 
     def reset_transform(self):
         self.translate = [0.0, 0.0, 0.0]
@@ -67,8 +78,8 @@ class Viewer:
 
         # --- Axes ---
         self.axes = Axes(
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main2d/gouraud.vert",
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main2d/gouraud.frag",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/2d/shaders/gouraud.vert",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/2d/shaders/gouraud.frag",
             length=2.0
         ).setup()
 
@@ -126,33 +137,132 @@ class Viewer:
 
         imgui.color_button("Preview", *state.color, flags=0)
 
+        # --- Shape-specific Parameters ---
+        current_shape = state.shapes_2d[state.shape_idx]
+
+        if current_shape == "Circle2D":
+            imgui.separator()
+            imgui.text("Circle Parameters")
+            _, state.circle_radius = imgui.slider_float("Radius", state.circle_radius, 0.1, 2.0)
+
+        elif current_shape == "Ellipse2D":
+            imgui.separator()
+            imgui.text("Ellipse Parameters")
+            _, state.ellipse_a = imgui.slider_float("A (width)", state.ellipse_a, 0.1, 2.0)
+            _, state.ellipse_b = imgui.slider_float("B (height)", state.ellipse_b, 0.1, 2.0)
+
+        elif current_shape in ["Pentagon2D", "Hexagon2D"]:
+            imgui.separator()
+            imgui.text("Regular Polygon")
+            _, state.polygon_sides = imgui.slider_int("Sides", state.polygon_sides, 3, 12)
+            _, state.polygon_radius = imgui.slider_float("Radius", state.polygon_radius, 0.1, 2.0)
+
+        elif current_shape == "Star2D":
+            imgui.separator()
+            imgui.text("Star Parameters")
+            _, state.star_points = imgui.slider_int("Points", state.star_points, 3, 10)
+            _, state.star_outer = imgui.slider_float("Outer Radius", state.star_outer, 0.1, 2.0)
+            _, state.star_inner = imgui.slider_float("Inner Radius", state.star_inner, 0.05, 1.5)
+
+
         imgui.end()
 
     def _update_scene_from_state(self):
-        current_shape = self.state.shapes_2d[self.state.shape_idx]
-        shape_changed = (self._managed_drawable is None or
-                         self._managed_drawable.__class__.__name__ != current_shape)
-        if shape_changed:
+        s = self.state
+        current_shape = s.shapes_2d[s.shape_idx]
+
+        # Kiểm tra nếu đổi loại hình
+        shape_changed = (
+            self._managed_drawable is None or
+            self._managed_drawable.__class__.__name__ != current_shape
+        )
+
+        # --- Kiểm tra thay đổi tham số ---
+        params_changed = False
+        if current_shape == "Circle2D":
+            params_changed = getattr(self, "_last_circle_radius", None) != s.circle_radius
+        elif current_shape == "Ellipse2D":
+            params_changed = (
+                getattr(self, "_last_ellipse_a", None) != s.ellipse_a or
+                getattr(self, "_last_ellipse_b", None) != s.ellipse_b
+            )
+        elif current_shape in ["Pentagon2D", "Hexagon2D"]:
+            params_changed = (
+                getattr(self, "_last_polygon_sides", None) != s.polygon_sides or
+                getattr(self, "_last_polygon_radius", None) != s.polygon_radius
+            )
+        elif current_shape == "Star2D":
+            params_changed = (
+                getattr(self, "_last_star_points", None) != s.star_points or
+                getattr(self, "_last_star_outer", None) != s.star_outer or
+                getattr(self, "_last_star_inner", None) != s.star_inner
+            )
+
+        # --- Nếu đổi hình hoặc tham số → tạo lại ---
+        if shape_changed or params_changed:
             try:
-                shape_class = globals()[current_shape]
-                self._managed_drawable = shape_class(
-                    render_mode=self.state.render_modes[self.state.render_mode_idx],
-                    vert_shader="(ignored)",
-                    frag_shader="(ignored)"
-                ).setup()
+                if current_shape == "Circle2D":
+                    self._managed_drawable = Circle2D(
+                        vert_shader="(ignored)", frag_shader="(ignored)",
+                        render_mode=s.render_modes[s.render_mode_idx],
+                        radius=s.circle_radius
+                    ).setup()
+                    self._last_circle_radius = s.circle_radius
+
+                elif current_shape == "Ellipse2D":
+                    self._managed_drawable = Ellipse2D(
+                        vert_shader="(ignored)", frag_shader="(ignored)",
+                        render_mode=s.render_modes[s.render_mode_idx],
+                        a=s.ellipse_a, b=s.ellipse_b
+                    ).setup()
+                    self._last_ellipse_a = s.ellipse_a
+                    self._last_ellipse_b = s.ellipse_b
+
+                elif current_shape in ["Pentagon2D", "Hexagon2D"]:
+                    # Nếu bạn có RegularPolygon2D thì dùng class đó
+                    self._managed_drawable = RegularPolygon2D(
+                        vert_shader="(ignored)", frag_shader="(ignored)",
+                        render_mode=s.render_modes[s.render_mode_idx],
+                        n=s.polygon_sides, r=s.polygon_radius
+                    ).setup()
+                    self._last_polygon_sides = s.polygon_sides
+                    self._last_polygon_radius = s.polygon_radius
+
+                elif current_shape == "Star2D":
+                    self._managed_drawable = Star2D(
+                        vert_shader="(ignored)", frag_shader="(ignored)",
+                        render_mode=s.render_modes[s.render_mode_idx],
+                        n=s.star_points, R=s.star_outer, r=s.star_inner
+                    ).setup()
+                    self._last_star_points = s.star_points
+                    self._last_star_outer = s.star_outer
+                    self._last_star_inner = s.star_inner
+
+                else:
+                    # Các hình khác: Triangle2D, Rectangle2D, Trapezoid2D, Arrow2D, ...
+                    shape_class = globals()[current_shape]
+                    self._managed_drawable = shape_class(
+                        render_mode=s.render_modes[s.render_mode_idx],
+                        vert_shader="(ignored)",
+                        frag_shader="(ignored)"
+                    ).setup()
+
                 self._managed_drawable.shape_name = current_shape
                 self.drawables = [self._managed_drawable]
+
             except Exception as e:
                 print(f"Error creating shape: {e}")
 
-        s = self.state
+        # --- Cập nhật transform ---
         transform = translate(s.translate) @ scale(s.scale)
         if self._managed_drawable:
             self._managed_drawable.transform = transform
+
+        # --- Cập nhật màu ---
         if hasattr(self._managed_drawable, "color"):
-            self._managed_drawable.color = self.state.color
+            self._managed_drawable.color = s.color
         elif hasattr(self._managed_drawable, "set_color"):
-            self._managed_drawable.set_color(self.state.color)
+            self._managed_drawable.set_color(s.color)
 
 
     def run(self):

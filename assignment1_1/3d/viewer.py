@@ -107,8 +107,8 @@ class Viewer:
         
         # --- Initialize Axes ---
         self.axes = Axes(
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
             length=2.0
         ).setup()
 
@@ -359,8 +359,8 @@ class Viewer:
 
                 elif current_shape == "Cylinder":
                     self._managed_drawable = Cylinder2(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
                         n=self.state.cylinder_segments,
                         r_bottom=self.state.cylinder_r_bottom,
                         r_top=self.state.cylinder_r_top
@@ -369,39 +369,39 @@ class Viewer:
                     
                 elif current_shape == "Cube":
                     self._managed_drawable = Cube(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag"
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
                     ).setup()
 
                 elif current_shape == "ConeCylinder":
                     self._managed_drawable = ConeWithCylinder(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag"
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
                     ).setup()
                     
                 elif current_shape == "Sphere":
                     self._managed_drawable = Sphere(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag"
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
                     ).setup()
                     
                 elif current_shape == "Cone":
                     self._managed_drawable = Cone(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag"
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
                     ).setup()
                     
                 elif current_shape == "Tetrahedron":
                     self._managed_drawable = Tetrahedron(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
                         size=0.5
                     ).setup()
                 
                 elif current_shape == "Torus":
                     self._managed_drawable = Torus(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
                         major_segments=self.state.torus_major_segments,
                         minor_segments=self.state.torus_minor_segments,
                         major_radius=self.state.torus_major_radius,
@@ -411,8 +411,8 @@ class Viewer:
                 
                 elif current_shape == "Prism":
                     self._managed_drawable = Prism(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
                         n_sides=self.state.prism_sides,
                         height=self.state.prism_height,
                         radius=self.state.prism_radius
@@ -422,8 +422,8 @@ class Viewer:
                 elif current_shape == "Equation":
                     from tostudents.main.mesh import EquationMesh
                     self._managed_drawable = EquationMesh(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
+                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
                         func_str=self.state.equation_str,
                         n=50
                     ).setup()
