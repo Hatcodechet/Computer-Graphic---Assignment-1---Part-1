@@ -24,6 +24,7 @@ class UIState:
         # Transform
         self.translate = [0.0, 0.0, 0.0]
         self.scale = [1.0, 1.0, 1.0]
+        self.rotation = 0.0
 
         # Toggle
         self.show_axes = True
@@ -89,6 +90,7 @@ class Viewer:
         glfw.set_scroll_callback(self.win, self.on_scroll)
 
         GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glDisable(GL.GL_CULL_FACE)
         GL.glClearColor(0.0, 0.0, 0.0, 1.0)
 
     def make_colors(self):
@@ -127,6 +129,11 @@ class Viewer:
         _, state.scale[0] = imgui.slider_float("X##scale", state.scale[0], 0.1, 10)
         _, state.scale[1] = imgui.slider_float("Y##scale", state.scale[1], 0.1, 10)
         _, state.scale[2] = imgui.slider_float("Z##scale", state.scale[2], 0.1, 10)
+
+        imgui.separator()
+        imgui.text("Rotation")
+        _, state.rotation = imgui.slider_float("Angle (°)", state.rotation, -180.0, 180.0)
+
 
         imgui.separator()
         imgui.text("Color (RGB)")
@@ -242,10 +249,10 @@ class Viewer:
                     # Các hình khác: Triangle2D, Rectangle2D, Trapezoid2D, Arrow2D, ...
                     shape_class = globals()[current_shape]
                     self._managed_drawable = shape_class(
-                        render_mode=s.render_modes[s.render_mode_idx],
-                        vert_shader="(ignored)",
-                        frag_shader="(ignored)"
-                    ).setup()
+    "(ignored)", "(ignored)",
+    render_mode=s.render_modes[s.render_mode_idx]
+).setup()
+
 
                 self._managed_drawable.shape_name = current_shape
                 self.drawables = [self._managed_drawable]
@@ -254,7 +261,8 @@ class Viewer:
                 print(f"Error creating shape: {e}")
 
         # --- Cập nhật transform ---
-        transform = translate(s.translate) @ scale(s.scale)
+        from tostudents.libs.transform import rotate
+        transform = translate(s.translate) @ rotate(axis=[0, 0, 1], angle=s.rotation) @ scale(s.scale)
         if self._managed_drawable:
             self._managed_drawable.transform = transform
 

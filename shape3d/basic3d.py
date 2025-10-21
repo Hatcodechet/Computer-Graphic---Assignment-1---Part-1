@@ -80,6 +80,13 @@ class Cube(object):
             self.selected_texture = 1
         if key == glfw.KEY_2:
             self.selected_texture = 2
+    
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+
 class Sphere(object):
     def __init__(self, vert_shader, frag_shader, stacks=16, slices=48):
         self.stacks = stacks
@@ -156,6 +163,11 @@ class Sphere(object):
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class Cone(object):
     def __init__(self, vert_shader, frag_shader, slices=48):
@@ -244,6 +256,11 @@ class Cone(object):
         GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
 
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class ConeFan(object):
     def __init__(self, vert_shader, frag_shader, slices=48):
@@ -336,6 +353,11 @@ class ConeFan(object):
         GL.glDrawElements(GL.GL_TRIANGLE_FAN, len(self.bottom_indices), 
                          GL.GL_UNSIGNED_INT, None)
         
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class Cylinder(object):
     def __init__(self, vert_shader, frag_shader, n=32):
@@ -423,7 +445,12 @@ class Cylinder(object):
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
-
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+'''
 class ConeWithCylinder(object):
     """Composite object: Cone trên, Cylinder dưới"""
     def __init__(self, vert_shader, frag_shader, slices=48):
@@ -449,6 +476,12 @@ class ConeWithCylinder(object):
         cylinder_model = model @ translate(0, -0.35, 0) 
         self.cylinder.draw(projection, view, cylinder_model)
 
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+'''
 
 class Tetrahedron(object):
     def __init__(self, vert_shader, frag_shader, size=1.0):
@@ -521,6 +554,11 @@ class Tetrahedron(object):
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class Cylinder2(object):
     def __init__(self, vert_shader, frag_shader, n=32, r_bottom=0.3, r_top=0.1):
@@ -619,6 +657,11 @@ class Cylinder2(object):
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class Torus(object):
     def __init__(self, vert_shader, frag_shader, major_segments=32, minor_segments=16, major_radius=0.4, minor_radius=0.15):
@@ -687,6 +730,11 @@ class Torus(object):
         self.vao = VAO()
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
@@ -709,6 +757,11 @@ class Torus(object):
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class Prism(object):
     def __init__(self, vert_shader, frag_shader, n_sides=6, height=0.8, radius=0.4):
@@ -795,6 +848,11 @@ class Prism(object):
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
         self.vao.add_ebo(self.indices)
         return self
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
     def draw(self, projection, view, model):
         GL.glUseProgram(self.shader.render_idx)
@@ -810,3 +868,8 @@ class Prism(object):
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)

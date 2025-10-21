@@ -17,17 +17,13 @@ class UIState:
         self.render_modes = ["Flat","Texture","Gouraud", "Phong", "Wireframe"]
         self.render_mode_idx = 0
 
-        self.shapes_2d = [
-            "Triangle2D", "Rectangle2D", "Pentagon2D", "Hexagon2D",
-            "Circle2D", "Ellipse2D", "Trapezoid2D", "Star2D", "Arrow2D"
-        ]
+        
 
         self.shapes_3d = [
-            "Cylinder", "ConeCylinder", "Cube", "Sphere", "Cone", 
+            "Cylinder", "Cube", "Sphere", "Cone", 
             "Tetrahedron", "Torus", "Prism", "Equation"
         ]
 
-        self.shape_category = 0  # 0 = 2D, 1 = 3D
         self.shape_idx = 0
 
         self.equation_str = "sin(x) * cos(y)"
@@ -35,6 +31,8 @@ class UIState:
 
         self.translate = [0.0, 0.0, 0.0]
         self.scale = [1.0, 1.0, 1.0]
+        self.rotate = [0.0, 0.0, 0.0]
+
         
         # Thêm tham số cho Cylinder/Cone
         self.cylinder_r_bottom = 0.3
@@ -55,9 +53,12 @@ class UIState:
         # Thêm toggle cho axes
         self.show_axes = True
 
+        self.color = [1.0, 1.0, 1.0]
+
     def reset_transform(self):
         self.translate = [0.0, 0.0, 0.0]
         self.scale = [1.0, 1.0, 1.0]
+        self.rotate = [0.0, 0.0, 0.0]
         self.cylinder_r_bottom = 0.3
         self.cylinder_r_top = 0.3
         self.cylinder_segments = 32
@@ -68,6 +69,8 @@ class UIState:
         self.prism_sides = 6
         self.prism_height = 0.8
         self.prism_radius = 0.4
+
+        self.color = [1.0, 1.0, 1.0]
 
 
 class Viewer:
@@ -167,22 +170,24 @@ class Viewer:
         imgui.text("Render Mode:")
         changed, state.render_mode_idx = imgui.combo("##render_mode", state.render_mode_idx, state.render_modes)
 
-        imgui.text("Shape Category:")
-        _, state.shape_category = imgui.combo("##category", state.shape_category, ["2D Shapes", "3D Shapes"])
+        if state.render_modes[state.render_mode_idx] == "Flat":
+            imgui.separator()
+            imgui.text("Flat Color (RGB):")
+            _, state.color[0] = imgui.slider_float("R", state.color[0], 0.0, 1.0)
+            _, state.color[1] = imgui.slider_float("G", state.color[1], 0.0, 1.0)
+            _, state.color[2] = imgui.slider_float("B", state.color[2], 0.0, 1.0)
+            imgui.color_button("Preview", *state.color, flags=0)
 
-        if state.shape_category == 0:
-            imgui.text("2D Shape:")
-            _, state.shape_idx = imgui.combo("##shape2d", state.shape_idx, state.shapes_2d)
-        else:
-            imgui.text("3D Shape:")
-            _, state.shape_idx = imgui.combo("##shape3d", state.shape_idx, state.shapes_3d)
+        imgui.text("3D Shape:")
+        _, state.shape_idx = imgui.combo("##shape3d", state.shape_idx, state.shapes_3d)
+
 
         # --- Show Axes Toggle ---
         imgui.separator()
         _, state.show_axes = imgui.checkbox("Show Axes", state.show_axes)
 
         # --- Cylinder/Cone parameters ---
-        current_shapes = state.shapes_2d if state.shape_category == 0 else state.shapes_3d
+        current_shapes = state.shapes_3d
         if current_shapes[state.shape_idx] == "Cylinder":
             imgui.separator()
             imgui.text("Cylinder Parameters:")
@@ -299,14 +304,19 @@ class Viewer:
         _, state.scale[1] = imgui.slider_float("Y##scale", state.scale[1], 0.1, 10)
         _, state.scale[2] = imgui.slider_float("Z##scale", state.scale[2], 0.1, 10)
 
+        imgui.separator()
+        imgui.text("Rotate (degrees)")
+        _, state.rotate[0] = imgui.slider_float("X##rot", state.rotate[0], -180, 180)
+        _, state.rotate[1] = imgui.slider_float("Y##rot", state.rotate[1], -180, 180)
+        _, state.rotate[2] = imgui.slider_float("Z##rot", state.rotate[2], -180, 180)
+
+
         imgui.end()
 
     def _update_scene_from_state(self):
         """Sync shape with UI"""
-        if self.state.shape_category == 0:
-            current_shape = self.state.shapes_2d[self.state.shape_idx]
-        else:
-            current_shape = self.state.shapes_3d[self.state.shape_idx]
+        
+        current_shape = self.state.shapes_3d[self.state.shape_idx]
 
         
         current_cylinder_params = (
@@ -373,11 +383,7 @@ class Viewer:
                         "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
                     ).setup()
 
-                elif current_shape == "ConeCylinder":
-                    self._managed_drawable = ConeWithCylinder(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
-                    ).setup()
+                
                     
                 elif current_shape == "Sphere":
                     self._managed_drawable = Sphere(
@@ -420,7 +426,7 @@ class Viewer:
                     self._last_prism_params = current_prism_params
                     
                 elif current_shape == "Equation":
-                    from tostudents.main.mesh import EquationMesh
+                    from tostudents.assignment1_1 import EquationMesh
                     self._managed_drawable = EquationMesh(
                         "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
                         "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
@@ -439,13 +445,24 @@ class Viewer:
                 pass
             
         s = self.state
-        if self.state.shape_category == 0:  # nếu là 2D
-            transform = translate([0, 0, -2]) @ scale(s.scale)
-        else:
-            transform = translate(s.translate) @ scale(s.scale)
+       
+        transform = (
+    translate(s.translate)
+    @ rotate(axis=[1, 0, 0], angle=s.rotate[0])
+    @ rotate(axis=[0, 1, 0], angle=s.rotate[1])
+    @ rotate(axis=[0, 0, 1], angle=s.rotate[2])
+    @ scale(s.scale)
+)
 
         if self._managed_drawable:
             self._managed_drawable.transform = transform
+        # --- Apply flat color if in Flat mode ---
+        if s.render_modes[s.render_mode_idx] == "Flat":
+            if hasattr(self._managed_drawable, "color"):
+                self._managed_drawable.color = s.color
+            elif hasattr(self._managed_drawable, "set_color"):
+                self._managed_drawable.set_color(s.color)
+
 
     # --- Event handling ---
     def on_key(self, _win, key, _scancode, action, _mods):

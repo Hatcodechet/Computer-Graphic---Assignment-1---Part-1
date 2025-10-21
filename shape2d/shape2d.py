@@ -24,12 +24,16 @@ class Shape2DBase:
         elif render_mode == "Gouraud":
             vs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/gouraud2d.vert"
             fs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/gouraud2d.frag"
+        elif render_mode == "Phong":
+            vs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/phong2d.vert"
+            fs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/phong2d.frag"
         elif render_mode == "Texture":
             vs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/texture2d.vert"
             fs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/texture2d.frag"
         else:
             vs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/flat2d.vert"
             fs = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/shader2d/flat2d.frag"
+
 
         self.shader = Shader(vs, fs)
         self.uma = UManager(self.shader)
@@ -51,20 +55,29 @@ class Shape2DBase:
         self.uma.upload_uniform_matrix4fv(view, 'view', True)
         self.uma.upload_uniform_matrix4fv(model, 'model', True)
 
-        # Flat color (1 màu toàn bộ)
-        if self.render_mode == "Flat":
-            loc = GL.glGetUniformLocation(self.shader.render_idx, "uColor")
-            GL.glUniform3fv(loc, 1, self.flat_color)
-        # Chế độ Wireframe
-
+        # --- Wireframe Mode ---
         if self.render_mode == "Wireframe":
             GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
+            GL.glLineWidth(1.0)
+
+            # Dùng màu trắng rõ ràng để thấy viền
+            loc = GL.glGetUniformLocation(self.shader.render_idx, "uColor")
+            if loc != -1:
+                GL.glUniform3f(loc, 1.0, 1.0, 1.0)
         else:
             GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+            if self.render_mode == "Flat":
+                loc = GL.glGetUniformLocation(self.shader.render_idx, "uColor")
+                if loc != -1:
+                    GL.glUniform3fv(loc, 1, self.flat_color)
 
+        # --- Draw call ---
         self.vao.activate()
         GL.glDrawElements(GL.GL_TRIANGLES, len(self.indices), GL.GL_UNSIGNED_INT, None)
+
+        # Reset lại polygon mode để không ảnh hưởng frame sau
         GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+
 
 
 # ============================================================
