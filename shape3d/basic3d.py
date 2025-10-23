@@ -6,6 +6,7 @@ import glfw
 from OpenGL import GL
 import ctypes
 from tostudents.libs.transform import Trackball, translate, scale  
+from PIL import Image
 
 
 class Cube(object):
@@ -43,6 +44,11 @@ class Cube(object):
             ],
             dtype=np.float32
         )
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
+
 
         self.vao = VAO()
 
@@ -57,6 +63,8 @@ class Cube(object):
         # setup VAO for drawing cylinder's side
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
 
         # setup EBO for drawing cylinder's side, bottom and top
         self.vao.add_ebo(self.indices)
@@ -87,87 +95,108 @@ class Cube(object):
         self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
+    def generate_uv(self):
+        self.texcoords = np.array([
+            [0, 0], [1, 0], [1, 1], [0, 1],
+            [0, 0], [1, 0], [1, 1], [0, 1],
+        ], dtype=np.float32)
+
 class Sphere(object):
-    def __init__(self, vert_shader, frag_shader, stacks=16, slices=48):
+    def __init__(self, vert_shader, frag_shader, stacks=32, slices=64, texture_path=None):
         self.stacks = stacks
         self.slices = slices
-        r = 0.5
+        self.radius = 0.5
+        self.texture_path = texture_path
 
         # ----- 1. Tạo đỉnh -----
-        vertices = []
+        vertices, normals, texcoords = [], [], []
 
-        # duyệt vĩ độ (stacks): từ -π/2 (nam cực) -> +π/2 (bắc cực)
         for i in range(stacks + 1):
-            phi = np.pi * i / stacks - np.pi / 2
-            y = r * np.sin(phi)
-            r_stack = r * np.cos(phi)
-
-            # duyệt kinh độ (slices): 0 -> 2π
+            phi = np.pi * i / stacks  # 0 -> π
+            y = np.cos(phi)
+            r_stack = np.sin(phi)
             for j in range(slices + 1):
-                theta = 2 * np.pi * j / slices
+                theta = 2 * np.pi * j / slices  # 0 -> 2π
                 x = r_stack * np.cos(theta)
                 z = r_stack * np.sin(theta)
-                vertices.append([x, y, z])
+                vertices.append([x * self.radius, y * self.radius, z * self.radius])
+                normals.append([x, y, z])
+                texcoords.append([j / slices, 1 - i / stacks])  # UV chuẩn Earth
 
         self.vertices = np.array(vertices, dtype=np.float32)
+        self.normals = np.array(normals, dtype=np.float32)
+        self.texcoords = np.array(texcoords, dtype=np.float32)
 
-        # ----- 2. Tạo indices -----
+        # ----- 2. Tạo indices dạng tam giác -----
         indices = []
         for i in range(stacks):
-            for j in range(slices + 1):
-                a = i * (slices + 1) + j
-                b = (i + 1) * (slices + 1) + j
-                indices += [a, b]
-
-            # degenerate ngắt strip giữa các stack
-            if i != stacks - 1:
-                indices += [b, (i + 1) * (slices + 1)]
-
+            for j in range(slices):
+                first = i * (slices + 1) + j
+                second = first + slices + 1
+                indices += [first, second, first + 1, second, second + 1, first + 1]
         self.indices = np.array(indices, dtype=np.uint32)
 
-        # ----- 3. Màu -----
-        colors = []
-        for i in range(len(vertices)):
-            colors.append([
-                0.5 + 0.5 * np.cos(i * np.pi / slices),
-                0.5 + 0.5 * np.sin(i * np.pi / slices),
-                1.0
-            ])
-        self.colors = np.array(colors, dtype=np.float32)
+        # ----- 3. Màu (chỉ để tránh lỗi shader nếu không có texture) -----
+        self.colors = np.ones_like(self.vertices, dtype=np.float32)
 
         # ----- 4. Shader + VAO -----
-        self.vao = VAO()
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
+        self.vao = VAO()
+
+        # Texture
+        self.texture_id = None
+        if self.texture_path:
+            self.load_texture(self.texture_path)
 
     # ---------------------------------------------------------
     def setup(self):
-        self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
-        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        """Setup VAO và buffer"""
+        self.vao.add_vbo(0, self.vertices, ncomponents=3)
+        self.vao.add_vbo(1, self.normals, ncomponents=3)
+        self.vao.add_vbo(2, self.colors, ncomponents=3)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2)
         self.vao.add_ebo(self.indices)
         return self
 
     # ---------------------------------------------------------
+    def load_texture(self, path):
+        """Nạp texture từ file ảnh (Earth, Sun, v.v.)"""
+        img = Image.open(path).convert("RGB")
+        img_data = img.tobytes("raw", "RGB", 0, -1)
+
+        self.texture_id = GL.glGenTextures(1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGB,
+                        img.width, img.height, 0, GL.GL_RGB,
+                        GL.GL_UNSIGNED_BYTE, img_data)
+        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_REPEAT)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+        print(f"[INFO] Texture loaded successfully: {path}")
+
+    # ---------------------------------------------------------
     def draw(self, projection, view, model):
+        """Vẽ sphere có texture"""
         GL.glUseProgram(self.shader.render_idx)
+        modelview = view if model is None else view @ model
 
-        if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+        self.uma.upload_uniform_matrix4fv(projection, "projection", True)
+        self.uma.upload_uniform_matrix4fv(modelview, "modelview", True)
 
-        self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        if self.texture_id:
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+            tex_loc = GL.glGetUniformLocation(self.shader.render_idx, "tex")
+            GL.glUniform1i(tex_loc, 0)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
-        GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
+        GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
-    def set_color(self, rgb):
-        """Cập nhật màu Flat từ Viewer"""
-        rgb = np.array(rgb, dtype=np.float32)
-        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
-        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
 class Cone(object):
     def __init__(self, vert_shader, frag_shader, slices=48):
@@ -191,6 +220,8 @@ class Cone(object):
         vertices.append([0, -h / 2, 0])  # index = slices + 2
 
         self.vertices = np.array(vertices, dtype=np.float32)
+        self.normals = self.vertices / np.linalg.norm(self.vertices, axis=1, keepdims=True)
+
 
         # ----- 2. create indices -----
         indices = []
@@ -225,6 +256,10 @@ class Cone(object):
                 t = (y + 0.35) / 0.7
                 colors.append([1.0, t, 0.2])
         self.colors = np.array(colors, dtype=np.float32)
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
 
 
         # ----- 4. Shader + VAO -----
@@ -236,6 +271,9 @@ class Cone(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
         self.vao.add_ebo(self.indices)
         return self
 
@@ -254,6 +292,15 @@ class Cone(object):
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
+
+    def generate_uv(self):
+        uv = []
+        for i in range(self.slices + 1):
+            u = i / self.slices
+            uv.append([u, 0])
+        uv.append([0.5, 1.0])  # apex
+        uv.append([0.5, 0.5])  # bottom center
+        self.texcoords = np.array(uv, dtype=np.float32)
 
 
     def set_color(self, rgb):
@@ -285,6 +332,9 @@ class ConeFan(object):
         vertices.append([0, -h / 2, 0])  # index = slices + 2
 
         self.vertices = np.array(vertices, dtype=np.float32)
+        # --- Normal vectors ---
+        self.normals = self.vertices / np.linalg.norm(self.vertices, axis=1, keepdims=True)
+
 
         # ----- 2.  indice side from top center -----
         side_indices = [slices + 1]  
@@ -321,6 +371,10 @@ class ConeFan(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
+
         # Chỉ cần add EBO một lần (có thể dùng side hoặc bottom, hoặc concatenate)
         # Nhưng để linh động, ta sẽ bind thủ công trong draw()
         self.vao.add_ebo(self.side_indices)
@@ -387,6 +441,9 @@ class Cylinder(object):
         vertices.append([0, +h, 0])  # index 2n+1
 
         self.vertices = np.array(vertices, dtype=np.float32)
+        # --- Normal vectors ---
+        self.normals = self.vertices / np.linalg.norm(self.vertices, axis=1, keepdims=True)
+
 
         # ----- 2. Tạo indices -----
         indices = []
@@ -416,6 +473,10 @@ class Cylinder(object):
                 1.0
             ])
         self.colors = np.array(colors, dtype=np.float32)
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
 
         # ----- 4. Shader + VAO -----
         self.vao = VAO()
@@ -426,6 +487,10 @@ class Cylinder(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
+
         self.vao.add_ebo(self.indices)
         return self
 
@@ -443,6 +508,11 @@ class Cylinder(object):
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
+        if self.texture_id:
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+            self.uma.upload_uniform_1i(0, "tex")
+
         GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
     def set_color(self, rgb):
@@ -450,6 +520,19 @@ class Cylinder(object):
         rgb = np.array(rgb, dtype=np.float32)
         self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+
+    def generate_uv(self):
+        n = self.n
+        uv = []
+        for i in range(n):
+            u = i / n
+            uv.append([u, 0])
+        for i in range(n):
+            u = i / n
+            uv.append([u, 1])
+        uv += [[0.5, 0.5], [0.5, 0.5]]
+        self.texcoords = np.array(uv, dtype=np.float32)
+
 '''
 class ConeWithCylinder(object):
     """Composite object: Cone trên, Cylinder dưới"""
@@ -526,6 +609,10 @@ class Tetrahedron(object):
             [0.0, 0.0, 1.0],  # Xanh dương
             [1.0, 1.0, 0.0],  # Vàng
         ], dtype=np.float32)
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
         
         # Shader & VAO
         self.vao = VAO()
@@ -536,6 +623,10 @@ class Tetrahedron(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
+
         self.vao.add_ebo(self.indices)
         return self
 
@@ -552,6 +643,11 @@ class Tetrahedron(object):
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
+        if self.texture_id:
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+            self.uma.upload_uniform_1i(0, "tex")
+
         GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
     def set_color(self, rgb):
@@ -559,6 +655,14 @@ class Tetrahedron(object):
         rgb = np.array(rgb, dtype=np.float32)
         self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+    def generate_uv(self):
+        self.texcoords = np.array([
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [0.5, 1.0],
+            [0.5, 0.5],
+        ], dtype=np.float32)
+
 
 class Cylinder2(object):
     def __init__(self, vert_shader, frag_shader, n=32, r_bottom=0.3, r_top=0.1):
@@ -595,6 +699,9 @@ class Cylinder2(object):
         vertices.append([0, +h, 0])  # index 2n+1
 
         self.vertices = np.array(vertices, dtype=np.float32)
+        # --- Normal vectors ---
+        self.normals = self.vertices / np.linalg.norm(self.vertices, axis=1, keepdims=True)
+
 
         # ----- 2. Tạo indices -----
         indices = []
@@ -628,6 +735,10 @@ class Cylinder2(object):
                 1.0
             ])
         self.colors = np.array(colors, dtype=np.float32)
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
 
         # ----- 4. Shader + VAO -----
         self.vao = VAO()
@@ -639,6 +750,9 @@ class Cylinder2(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
         self.vao.add_ebo(self.indices)
         return self
 
@@ -662,6 +776,30 @@ class Cylinder2(object):
         rgb = np.array(rgb, dtype=np.float32)
         self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+    def generate_uv(self):
+        n = self.n
+        uv = []
+        for i in range(n):
+            u = i / n
+            uv.append([u, 0])
+        for i in range(n):
+            u = i / n
+            uv.append([u, 1])
+        uv += [[0.5, 0.5], [0.5, 0.5]]  # center top/bottom
+        self.texcoords = np.array(uv, dtype=np.float32)
+
+    def load_texture(self, path):
+        """Load ảnh ngoài vào OpenGL texture"""
+        img = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert("RGBA")
+        img_data = np.array(img, dtype=np.uint8)
+        self.texture_id = GL.glGenTextures(1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, img.width, img.height, 0,
+                        GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
+        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+
 
 class Torus(object):
     def __init__(self, vert_shader, frag_shader, major_segments=32, minor_segments=16, major_radius=0.4, minor_radius=0.15):
@@ -696,6 +834,9 @@ class Torus(object):
                 vertices.append([x, y, z])
         
         self.vertices = np.array(vertices, dtype=np.float32)
+        # --- Normal vectors ---
+        self.normals = self.vertices / np.linalg.norm(self.vertices, axis=1, keepdims=True)
+
 
         # ----- 2. Tạo indices (sử dụng triangles) -----
         indices = []
@@ -725,6 +866,10 @@ class Torus(object):
                 0.8
             ])
         self.colors = np.array(colors, dtype=np.float32)
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
 
         # ----- 4. Shader + VAO -----
         self.vao = VAO()
@@ -739,6 +884,10 @@ class Torus(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
+
         self.vao.add_ebo(self.indices)
         return self
 
@@ -762,6 +911,28 @@ class Torus(object):
         rgb = np.array(rgb, dtype=np.float32)
         self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+
+    def generate_uv(self):
+        uv = []
+        for i in range(self.major_segments):
+            for j in range(self.minor_segments):
+                u = i / self.major_segments
+                v = j / self.minor_segments
+                uv.append([u, v])
+        self.texcoords = np.array(uv, dtype=np.float32)
+    def load_texture(self, path):
+        """Load ảnh ngoài vào OpenGL texture"""
+        img = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert("RGBA")
+        img_data = np.array(img, dtype=np.uint8)
+        self.texture_id = GL.glGenTextures(1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, img.width, img.height, 0,
+                        GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
+        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+
+
 
 class Prism(object):
     def __init__(self, vert_shader, frag_shader, n_sides=6, height=0.8, radius=0.4):
@@ -799,6 +970,9 @@ class Prism(object):
         vertices.append([0, +h, 0])  # index: 2*n_sides + 1
 
         self.vertices = np.array(vertices, dtype=np.float32)
+        # --- Normal vectors ---
+        self.normals = self.vertices / np.linalg.norm(self.vertices, axis=1, keepdims=True)
+
 
         # ----- 2. Tạo indices -----
         indices = []
@@ -837,6 +1011,10 @@ class Prism(object):
                 colors.append([1.0, 0.9, 0.3])
         
         self.colors = np.array(colors, dtype=np.float32)
+        # ---- Texture setup ----
+        self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
+        self.texture_id = None
+        self.generate_uv()
 
         # ----- 4. Shader + VAO -----
         self.vao = VAO()
@@ -846,6 +1024,9 @@ class Prism(object):
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(2, self.normals, ncomponents=3, stride=0, offset=None)
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2, stride=0, offset=None)
+
         self.vao.add_ebo(self.indices)
         return self
     def set_color(self, rgb):
@@ -873,3 +1054,29 @@ class Prism(object):
         rgb = np.array(rgb, dtype=np.float32)
         self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
         self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
+
+    def generate_uv(self):
+        n = self.n_sides
+        uv = []
+        for i in range(n):
+            u = i / n
+            uv.append([u, 0])
+        for i in range(n):
+            u = i / n
+            uv.append([u, 1])
+        uv += [[0.5, 0.5], [0.5, 0.5]]
+        self.texcoords = np.array(uv, dtype=np.float32)
+
+    def load_texture(self, path):
+        """Load ảnh ngoài vào OpenGL texture"""
+        img = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert("RGBA")
+        img_data = np.array(img, dtype=np.uint8)
+        self.texture_id = GL.glGenTextures(1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, img.width, img.height, 0,
+                        GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
+        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+
+

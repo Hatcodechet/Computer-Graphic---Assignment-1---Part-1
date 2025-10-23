@@ -108,7 +108,7 @@ def main():
     viewer = Viewer()
     # place instances of our basic objects
 
-    model = TexCube("./phong_texture.vert", "./phong_texture.frag").setup()
+    model = TexCube("/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/texcube/phong_texture.vert", "./phong_texture.frag").setup()
     viewer.add(model)
 
     # start rendering loop

@@ -5,13 +5,35 @@ from itertools import cycle
 from tostudents.libs.transform import Trackball, translate, rotate, scale
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
+import numexpr as ne
+from sympy import symbols, sympify
 
 #from tostudents.shape2d.triangle2d import Triangle2D
 from tostudents.shape2d.shape2d import *
 from tostudents.shape3d.basic3d import *
 from tostudents.main.axes import Axes
-
-
+from tostudents.assignment1_1.shape3d.mesh import EquationSurface
+class FunctionUI:
+    def __init__(self):
+        self.functions = [
+            "Himmelblau Function",
+            "Rosenbrock Function",
+            "Quadratic Bowl",
+            "Booth Function"
+        ]
+        self.selected_func = 0
+        self.func_expressions = [
+            "(x**2 + y - 11)**2 + (x + y**2 - 7)**2",  # Himmelblau
+            "100*(y - x**2)**2 + (1 - x)**2",          # Rosenbrock
+            "x**2 + y**2",                             # Quadratic
+            "(x + 2*y - 7)**2 + (2*x + y - 5)**2"      # Booth
+        ]
+        self.ranges = [
+            [-6.0, 6.0, -6.0, 6.0],   # Xmin, Xmax, Ymin, Ymax (Himmelblau)
+            [-2.0, 2.0, -1.0, 3.0],   # Rosenbrock
+            [-5.0, 5.0, -5.0, 5.0],   # Quadratic
+            [-10.0, 10.0, -10.0, 10.0]  # Booth
+        ]
 class UIState:
     def __init__(self):
         self.render_modes = ["Flat","Texture","Gouraud", "Phong", "Wireframe"]
@@ -54,6 +76,11 @@ class UIState:
         self.show_axes = True
 
         self.color = [1.0, 1.0, 1.0]
+        self.texture_path = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/Gradient-Descent-Visualizer/resources/textures/earth.jpg"
+
+        self.view_modes = ["3D Surface", "2D Contour"]
+        self.view_mode_idx = 0
+
 
     def reset_transform(self):
         self.translate = [0.0, 0.0, 0.0]
@@ -101,17 +128,18 @@ class Viewer:
 
         # --- State ---
         self.state = UIState()
+        self.func_ui = FunctionUI()  # <-- THÊM DÒNG NÀY
         self.drawables = []
         self._managed_drawable = None
         self._last_cylinder_params = None
         self._last_torus_params = None
         self._last_prism_params = None
         self._last_equation_str = None
-        
+        self.func_ui = FunctionUI()
         # --- Initialize Axes ---
         self.axes = Axes(
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.vert",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.frag",
             length=2.0
         ).setup()
 
@@ -138,28 +166,42 @@ class Viewer:
             self.impl.process_inputs()
             imgui.new_frame()
 
+            # Render UI
             self.render_ui(self.state)
             self._update_scene_from_state()
 
+            # --- CLEAR & MATRIX ---
             GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
             win_size = glfw.get_window_size(self.win)
             view = self.trackball.view_matrix()
             projection = self.trackball.projection_matrix(win_size)
 
-            # Draw axes first (if enabled)
+            # --- Set polygon mode before drawing 3D shapes ---
+            render_mode = self.state.render_modes[self.state.render_mode_idx]
+            if render_mode == "Wireframe":
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
+            else:
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+
+            # Draw axes
             if self.state.show_axes:
                 self.axes.draw(projection, view, np.eye(4))
 
-            # Draw main shape
+            # Draw shapes
             for drawable in self.drawables:
                 drawable.draw(projection, view, drawable.transform)
+
+            # --- Reset to FILL before rendering ImGui ---
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
 
             imgui.render()
             self.impl.render(imgui.get_draw_data())
             glfw.swap_buffers(self.win)
 
+        # Cleanup
         self.impl.shutdown()
         imgui.destroy_context()
+
 
     def render_ui(self, state):
         sidebar_width = 320
@@ -177,6 +219,24 @@ class Viewer:
             _, state.color[1] = imgui.slider_float("G", state.color[1], 0.0, 1.0)
             _, state.color[2] = imgui.slider_float("B", state.color[2], 0.0, 1.0)
             imgui.color_button("Preview", *state.color, flags=0)
+        elif state.render_modes[state.render_mode_idx] == "Texture":
+            imgui.separator()
+            imgui.text("Texture Mapping:")
+            path = None
+            if imgui.button("Load Texture", width=-1):
+                import os
+                if imgui.button("Load Texture", width=-1):
+                    import easygui  # hoặc file-dialog khác đơn giản (nếu đã cài)
+                    path = easygui.fileopenbox(title="Select Texture", default="*.png")
+                    if path:
+                        state.texture_path = os.path.abspath(path)
+                        print(f"[INFO] Texture selected: {path}")
+
+                if path:
+                    state.texture_path = path
+                    print(f"[INFO] Texture loaded: {path}")
+
+        
 
         imgui.text("3D Shape:")
         _, state.shape_idx = imgui.combo("##shape3d", state.shape_idx, state.shapes_3d)
@@ -271,6 +331,10 @@ class Viewer:
             if imgui.button("Hexagon", width=95):
                 state.prism_sides = 6
                 
+        imgui.separator()
+        imgui.text("View Mode:")
+        _, state.view_mode_idx = imgui.combo("##view_mode", state.view_mode_idx, state.view_modes)
+
         # --- Equation parameters ---
         if current_shapes[state.shape_idx] == "Equation":
             imgui.separator()
@@ -310,6 +374,28 @@ class Viewer:
         _, state.rotate[1] = imgui.slider_float("Y##rot", state.rotate[1], -180, 180)
         _, state.rotate[2] = imgui.slider_float("Z##rot", state.rotate[2], -180, 180)
 
+        # --- Function selection (z = f(x, y)) ---
+        if state.shapes_3d[state.shape_idx] == "Equation":
+            imgui.separator()
+            imgui.text("Function Selection & Parameters")
+            for i, func_name in enumerate(self.func_ui.functions):
+                if imgui.radio_button(func_name, self.func_ui.selected_func == i):
+                    self.func_ui.selected_func = i
+
+
+                # Hiển thị công thức và range nếu đang chọn
+                if self.func_ui.selected_func == i:
+                    imgui.text(f"f(x,y) = {self.func_ui.func_expressions[i]}")
+
+                    imgui.text("X Range")
+                    _, self.func_ui.ranges[i][0] = imgui.input_float(f"From##X{i}", self.func_ui.ranges[i][0])
+                    imgui.same_line()
+                    _, self.func_ui.ranges[i][1] = imgui.input_float(f"To##X{i}", self.func_ui.ranges[i][1])
+
+                    imgui.text("Y Range")
+                    _, self.func_ui.ranges[i][2] = imgui.input_float(f"From##Y{i}", self.func_ui.ranges[i][2])
+                    imgui.same_line()
+                    _, self.func_ui.ranges[i][3] = imgui.input_float(f"To##Y{i}", self.func_ui.ranges[i][3])
 
         imgui.end()
 
@@ -354,6 +440,26 @@ class Viewer:
             (current_shape == "Equation" and equation_changed)
         )
         
+        # --- Chọn shader theo render mode ---
+        render_mode = self.state.render_modes[self.state.render_mode_idx]
+        shader_dir = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/"
+
+        if render_mode == "Phong":
+            vert = shader_dir + "phong.vert"
+            frag = shader_dir + "phong.frag"
+        elif render_mode == "Gouraud":
+            vert = shader_dir + "gouraud.vert"
+            frag = shader_dir + "gouraud.frag"
+        elif render_mode == "Flat":
+            vert = shader_dir + "flat.vert"
+            frag = shader_dir + "flat.frag"
+        elif render_mode == "Texture":
+            vert = shader_dir + "texture.vert"
+            frag = shader_dir + "texture.frag"
+        else:
+            vert = shader_dir + "wf.vert"
+            frag = shader_dir + "wf.frag"
+
         if needs_recreate:
             try:
                 if current_shape in [
@@ -369,45 +475,40 @@ class Viewer:
 
                 elif current_shape == "Cylinder":
                     self._managed_drawable = Cylinder2(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
+                        vert, frag,  
                         n=self.state.cylinder_segments,
                         r_bottom=self.state.cylinder_r_bottom,
                         r_top=self.state.cylinder_r_top
                     ).setup()
                     self._last_cylinder_params = current_cylinder_params
+
                     
                 elif current_shape == "Cube":
-                    self._managed_drawable = Cube(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
-                    ).setup()
+                    self._managed_drawable = Cube(vert, frag).setup()
 
                 
                     
                 elif current_shape == "Sphere":
+                    # Load Sphere có texture (chỉ tạo 1 lần)
                     self._managed_drawable = Sphere(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
+                        vert, frag, texture_path=self.state.texture_path
                     ).setup()
+
                     
                 elif current_shape == "Cone":
-                    self._managed_drawable = Cone(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag"
-                    ).setup()
+                    self._managed_drawable = Cone(vert, frag).setup()
                     
                 elif current_shape == "Tetrahedron":
                     self._managed_drawable = Tetrahedron(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
+                        vert,
+                        frag,
                         size=0.5
                     ).setup()
                 
                 elif current_shape == "Torus":
                     self._managed_drawable = Torus(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
+                        vert,
+                        frag,
                         major_segments=self.state.torus_major_segments,
                         minor_segments=self.state.torus_minor_segments,
                         major_radius=self.state.torus_major_radius,
@@ -417,8 +518,8 @@ class Viewer:
                 
                 elif current_shape == "Prism":
                     self._managed_drawable = Prism(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
+                        vert,
+                        frag,
                         n_sides=self.state.prism_sides,
                         height=self.state.prism_height,
                         radius=self.state.prism_radius
@@ -426,24 +527,36 @@ class Viewer:
                     self._last_prism_params = current_prism_params
                     
                 elif current_shape == "Equation":
-                    from tostudents.assignment1_1 import EquationMesh
-                    self._managed_drawable = EquationMesh(
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.vert",
-                        "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/3d/shaders/gouraud.frag",
-                        func_str=self.state.equation_str,
-                        n=50
+                    func_i = self.func_ui.selected_func
+                    expr = self.func_ui.func_expressions[func_i]
+                    x_min, x_max, y_min, y_max = self.func_ui.ranges[func_i]
+
+                    self._managed_drawable = EquationSurface(
+                        vert_shader=vert,
+                        frag_shader=frag,
+                        func_str=expr,
+                        x_range=(x_min, x_max),
+                        y_range=(y_min, y_max),
+                        n=80
                     ).setup()
-                    self._last_equation_str = self.state.equation_str
+                    self._last_equation_str = expr
+
                 else:
                     raise ValueError(f"Unknown shape: {current_shape}")
 
                 self._managed_drawable.shape_name = current_shape
+                #if render_mode == "Texture" and hasattr(self._managed_drawable, "load_texture"):
+                 #   if self._managed_drawable.texture_id is None:
+                  #      self._managed_drawable.load_texture(self.state.texture_path)
+
                 self.drawables = [self._managed_drawable]
                 
             except Exception as e:
                 print(f"Error creating shape: {e}")
                 pass
-            
+        if not needs_recreate:
+            return
+        # --- Update transform ---
         s = self.state
        
         transform = (
@@ -484,6 +597,7 @@ class Viewer:
 
     def on_scroll(self, win, _deltax, deltay):
         self.trackball.zoom(deltay, glfw.get_window_size(win)[1])
+
 
 
 def main():
