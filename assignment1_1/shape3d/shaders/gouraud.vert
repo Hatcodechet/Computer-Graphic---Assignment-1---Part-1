@@ -1,14 +1,15 @@
 #version 330 core
 
-// input attribute variable, given per vertex
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 color;
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_color;
 
-uniform mat4 projection, modelview;
-out vec3 colorInterp;
+uniform mat4 projection;
+uniform mat4 modelview;
 
-out vec3 fragment_color;
-void main(){
-    colorInterp = color;
-    gl_Position = projection * modelview * vec4(position, 1.0);;
+out vec3 v_color;
+
+void main() {
+    // chỉ nội suy màu gốc giữa các đỉnh
+    v_color = a_color;
+    gl_Position = projection * modelview * vec4(a_position, 1.0);
 }

@@ -222,19 +222,13 @@ class Viewer:
         elif state.render_modes[state.render_mode_idx] == "Texture":
             imgui.separator()
             imgui.text("Texture Mapping:")
-            path = None
             if imgui.button("Load Texture", width=-1):
-                import os
-                if imgui.button("Load Texture", width=-1):
-                    import easygui  # hoặc file-dialog khác đơn giản (nếu đã cài)
-                    path = easygui.fileopenbox(title="Select Texture", default="*.png")
-                    if path:
-                        state.texture_path = os.path.abspath(path)
-                        print(f"[INFO] Texture selected: {path}")
-
+                import easygui, os
+                path = easygui.fileopenbox(title="Select Texture", default="*.png")
                 if path:
-                    state.texture_path = path
-                    print(f"[INFO] Texture loaded: {path}")
+                    state.texture_path = os.path.abspath(path)
+                    print(f"[INFO] Texture selected: {path}")
+
 
         
 
@@ -432,18 +426,21 @@ class Viewer:
         shape_changed = (self._managed_drawable is None or 
                         self._managed_drawable.__class__.__name__ != current_shape)
         
+        
         needs_recreate = (
-            shape_changed or 
-            (current_shape == "Cylinder" and cylinder_params_changed) or
-            (current_shape == "Torus" and torus_params_changed) or
-            (current_shape == "Prism" and prism_params_changed) or
-            (current_shape == "Equation" and equation_changed)
-        )
+    shape_changed  or
+    (current_shape == "Cylinder" and cylinder_params_changed) or
+    (current_shape == "Torus" and torus_params_changed) or
+    (current_shape == "Prism" and prism_params_changed) or
+    (current_shape == "Equation" and equation_changed)
+)
         
         # --- Chọn shader theo render mode ---
         render_mode = self.state.render_modes[self.state.render_mode_idx]
         shader_dir = "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/"
 
+        #shader_changed = getattr(self, "_last_render_mode", None) != render_mode
+        #self._last_render_mode = render_mode
         if render_mode == "Phong":
             vert = shader_dir + "phong.vert"
             frag = shader_dir + "phong.frag"
@@ -459,7 +456,8 @@ class Viewer:
         else:
             vert = shader_dir + "wf.vert"
             frag = shader_dir + "wf.frag"
-
+        shader_changed = getattr(self, "_last_render_mode", None) != render_mode
+        self._last_render_mode = render_mode
         if needs_recreate:
             try:
                 if current_shape in [
@@ -490,9 +488,9 @@ class Viewer:
                     
                 elif current_shape == "Sphere":
                     # Load Sphere có texture (chỉ tạo 1 lần)
-                    self._managed_drawable = Sphere(
-                        vert, frag, texture_path=self.state.texture_path
-                    ).setup()
+                    self._managed_drawable = Sphere(vert, frag).setup()
+                    #if render_mode == "Texture":
+                     #   self._managed_drawable.load_texture(self.state.texture_path)
 
                     
                 elif current_shape == "Cone":
@@ -545,9 +543,20 @@ class Viewer:
                     raise ValueError(f"Unknown shape: {current_shape}")
 
                 self._managed_drawable.shape_name = current_shape
-                #if render_mode == "Texture" and hasattr(self._managed_drawable, "load_texture"):
-                 #   if self._managed_drawable.texture_id is None:
-                  #      self._managed_drawable.load_texture(self.state.texture_path)
+                # --- Chỉ load texture 1 lần khi bật mode Texture ---
+                if render_mode == "Texture" and hasattr(self._managed_drawable, "load_texture"):
+                    # Khởi tạo biến flag nếu chưa có
+                    if not hasattr(self, "_texture_loaded_for_shape"):
+                        self._texture_loaded_for_shape = False
+
+                    if (not self._texture_loaded_for_shape) and self._managed_drawable.texture_id is None:
+                        print(f"[INFO] Loading texture once: {self.state.texture_path}")
+                        self._managed_drawable.load_texture(self.state.texture_path)
+                        self._texture_loaded_for_shape = True
+                else:
+                    # Reset flag khi đổi sang mode khác
+                    self._texture_loaded_for_shape = False
+
 
                 self.drawables = [self._managed_drawable]
                 

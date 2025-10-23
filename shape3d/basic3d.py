@@ -108,26 +108,26 @@ class Sphere(object):
         self.radius = 0.5
         self.texture_path = texture_path
 
-        # ----- 1. Tạo đỉnh -----
+        # ----- 1. Tạo đỉnh, pháp tuyến và UV -----
         vertices, normals, texcoords = [], [], []
 
         for i in range(stacks + 1):
-            phi = np.pi * i / stacks  # 0 -> π
+            phi = np.pi * i / stacks          # từ 0 → π (từ đỉnh đến đáy)
             y = np.cos(phi)
             r_stack = np.sin(phi)
             for j in range(slices + 1):
-                theta = 2 * np.pi * j / slices  # 0 -> 2π
+                theta = 2 * np.pi * j / slices  # từ 0 → 2π
                 x = r_stack * np.cos(theta)
                 z = r_stack * np.sin(theta)
                 vertices.append([x * self.radius, y * self.radius, z * self.radius])
                 normals.append([x, y, z])
-                texcoords.append([j / slices, 1 - i / stacks])  # UV chuẩn Earth
+                texcoords.append([j / slices, 1 - i / stacks])  # UV mapping chuẩn
 
         self.vertices = np.array(vertices, dtype=np.float32)
         self.normals = np.array(normals, dtype=np.float32)
         self.texcoords = np.array(texcoords, dtype=np.float32)
 
-        # ----- 2. Tạo indices dạng tam giác -----
+        # ----- 2. Tạo chỉ số tam giác -----
         indices = []
         for i in range(stacks):
             for j in range(slices):
@@ -136,33 +136,52 @@ class Sphere(object):
                 indices += [first, second, first + 1, second, second + 1, first + 1]
         self.indices = np.array(indices, dtype=np.uint32)
 
-        # ----- 3. Màu (chỉ để tránh lỗi shader nếu không có texture) -----
-        self.colors = np.ones_like(self.vertices, dtype=np.float32)
+        # ----- 3. Màu mặc định (white) -----
+        self.colors = np.abs(self.vertices)
 
-        # ----- 4. Shader + VAO -----
+        # ----- 4. Shader + Uniform manager + VAO -----
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
         self.vao = VAO()
-
-        # Texture
         self.texture_id = None
+
         if self.texture_path:
             self.load_texture(self.texture_path)
 
     # ---------------------------------------------------------
     def setup(self):
         """Setup VAO và buffer"""
-        self.vao.add_vbo(0, self.vertices, ncomponents=3)
-        self.vao.add_vbo(1, self.normals, ncomponents=3)
-        self.vao.add_vbo(2, self.colors, ncomponents=3)
-        self.vao.add_vbo(3, self.texcoords, ncomponents=2)
+        self.vao.add_vbo(0, self.vertices, ncomponents=3)   # layout(location = 0) position
+        self.vao.add_vbo(1, self.colors, ncomponents=3)     # layout(location = 1) color
+        self.vao.add_vbo(2, self.normals, ncomponents=3)    # layout(location = 2) normal
+        self.vao.add_vbo(3, self.texcoords, ncomponents=2)  # layout(location = 3) texcoord
         self.vao.add_ebo(self.indices)
         return self
 
     # ---------------------------------------------------------
+    def draw(self, projection, view, model):
+        """Vẽ sphere với shader hiện tại"""
+        GL.glUseProgram(self.shader.render_idx)
+        modelview = view if model is None else view @ model
+
+        self.uma.upload_uniform_matrix4fv(projection, "projection", True)
+        self.uma.upload_uniform_matrix4fv(modelview, "modelview", True)
+
+        # Gắn texture nếu có
+        if self.texture_id:
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
+            tex_loc = GL.glGetUniformLocation(self.shader.render_idx, "tex")
+            GL.glUniform1i(tex_loc, 0)
+
+        self.vao.activate()
+        GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
+
+    # ---------------------------------------------------------
     def load_texture(self, path):
-        """Nạp texture từ file ảnh (Earth, Sun, v.v.)"""
-        img = Image.open(path).convert("RGB")
+        """Nạp texture (ví dụ earth.jpg)"""
+        img = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert("RGB")
         img_data = img.tobytes("raw", "RGB", 0, -1)
 
         self.texture_id = GL.glGenTextures(1)
@@ -173,29 +192,19 @@ class Sphere(object):
         GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
 
         GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_REPEAT)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_REPEAT)
         GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)
         GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
         print(f"[INFO] Texture loaded successfully: {path}")
 
     # ---------------------------------------------------------
-    def draw(self, projection, view, model):
-        """Vẽ sphere có texture"""
-        GL.glUseProgram(self.shader.render_idx)
-        modelview = view if model is None else view @ model
+    def set_color(self, rgb):
+        """Cập nhật màu Flat từ Viewer"""
+        rgb = np.array(rgb, dtype=np.float32)
+        self.colors = np.tile(rgb, (self.vertices.shape[0], 1))
+        # update lại VBO màu
+        self.vao.add_vbo(1, self.colors, ncomponents=3, stride=0, offset=None)
 
-        self.uma.upload_uniform_matrix4fv(projection, "projection", True)
-        self.uma.upload_uniform_matrix4fv(modelview, "modelview", True)
-
-        if self.texture_id:
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.texture_id)
-            tex_loc = GL.glGetUniformLocation(self.shader.render_idx, "tex")
-            GL.glUniform1i(tex_loc, 0)
-
-        self.vao.activate()
-        GL.glEnable(GL.GL_DEPTH_TEST)
-        GL.glDrawElements(GL.GL_TRIANGLES, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
 
 
 class Cone(object):
