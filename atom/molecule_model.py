@@ -34,6 +34,7 @@ class MoleculeModel:
                  molecule_name,
                  solid_vert, solid_white, solid_red, solid_black, solid_gray,
                  gouraud_vert, gouraud_frag,
+                 phong_vert, phong_frag,
                  animate=False):
         self.molecule_name = molecule_name
         self.animate = animate
@@ -47,9 +48,15 @@ class MoleculeModel:
 
         self.gouraud_vert = gouraud_vert
         self.gouraud_frag = gouraud_frag
+        
+        self.phong_vert = phong_vert
+        self.phong_frag = phong_frag
+        
+        # Vibration mode
+        self.vibration_mode = "All"
 
         # scene objects
-        self.atoms = []   # list of dict {obj: Sphere, pos: np.array, element: "H/O/C"}
+        self.atoms = []   # list of dict {obj: Sphere, pos: np.array, element: "H/O/C", orig_pos: base position}
         self.bonds = []   # list of dict {obj: Cylinder, a: idx, b: idx}
 
         # Radii for drawing (not real covalent radii)
@@ -100,19 +107,32 @@ class MoleculeModel:
         self.atoms.clear()
         self.bonds.clear()
 
-        # 1) Build atoms (colored spheres)
+        # 1) Build atoms (colored spheres) with Phong shading
         for elem, pos in data["atoms"]:
             frag_path = self.elem_frag.get(elem, self.solid_gray)
-            sphere = Sphere(self.gouraud_vert, self.gouraud_frag, stacks=24, slices=48).setup()
+            sphere = Sphere(self.phong_vert, self.phong_frag, stacks=24, slices=48).setup()
+            # Set color based on element (use colors that work well with Phong shading)
+            if elem == "H":
+                sphere.set_color([0.9, 0.9, 0.9])  # Light gray-white for hydrogen
+            elif elem == "O":
+                sphere.set_color([0.8, 0.2, 0.2])  # Red for oxygen
+            elif elem == "C":
+                sphere.set_color([0.2, 0.2, 0.2])  # Dark gray for carbon (not pure black for better visibility)
+            else:
+                sphere.set_color([0.5, 0.5, 0.5])  # Gray for others
+            pos_array = np.array(pos, dtype=np.float32)
             self.atoms.append({
                 "obj": sphere,
-                "pos": np.array(pos, dtype=np.float32),
+                "pos": pos_array.copy(),  # Current animated position
+                "orig_pos": pos_array.copy(),  # Original/base position
                 "elem": elem
             })
 
-        # 2) Build bonds (cylinders)
+        # 2) Build bonds (cylinders) with Phong shading and gray color
         for (ia, ib) in data["bonds"]:
-            cyl = Cylinder(self.gouraud_vert, self.gouraud_frag, n=24, r_bottom=self.bond_radius, r_top=self.bond_radius).setup()
+            cyl = Cylinder(self.phong_vert, self.phong_frag, n=24, r_bottom=self.bond_radius, r_top=self.bond_radius).setup()
+            # Set color to a subtle gray-brown for bonds (more realistic for molecular bonds)
+            cyl.set_color([0.6, 0.55, 0.5])  # Subtle gray-brown for bonds
             self.bonds.append({
                 "obj": cyl,
                 "a": ia,
@@ -124,6 +144,104 @@ class MoleculeModel:
         # Optional: molecule rotation/vibration
         if self.animate:
             self.time += dt
+    
+    def get_animated_positions(self):
+        """Tính vị trí động của các nguyên tử dựa trên nhiều mode dao động."""
+        if not self.animate:
+            return [a["orig_pos"].copy() for a in self.atoms]
+
+        t = self.time
+        vib_mode = self.vibration_mode
+        animated_positions = []
+        
+        # Get reference to oxygen for H2O
+        o_pos = self.atoms[0]["orig_pos"] if self.molecule_name == "H2O" else None
+        
+        for i, a in enumerate(self.atoms):
+            pos = a["orig_pos"].copy()
+            elem = a["elem"]
+            if i == 0:
+                animated_positions.append(pos)
+                continue
+            
+            # === STRETCHING MODES ===
+            # Apply only if mode is "All" or "Stretching"
+            if vib_mode in ["All", "Stretching"]:
+                # For stretching: move along the bond direction only
+                # In H2O: each H only stretches along its own O-H bond
+                if self.molecule_name == "H2O" and elem == "H":
+                    # H atoms: stretch along O-H bond
+                    o_pos = self.atoms[0]["orig_pos"]
+                    h_orig = self.atoms[i]["orig_pos"]
+                    
+                    # Direction from O to H
+                    oh_vec = h_orig - o_pos
+                    oh_len = np.linalg.norm(oh_vec)
+                    
+                    if oh_len > 1e-6:
+                        oh_dir = oh_vec / oh_len
+                        # First H and second H have different phases
+                        freq = 2.5 if i == 1 else 3.0
+                        phase = t * freq
+                        stretch_amp = 0.04 * math.sin(phase)
+                        # Stretch outward (away from O)
+                        pos += oh_dir * stretch_amp
+                else:
+                    # For other molecules, apply bond stretching
+                    for b_idx, bond in enumerate(self.bonds):
+                        ai, bi = bond["a"], bond["b"]
+                        
+                        if i == ai or i == bi:
+                            pa_orig = self.atoms[ai]["orig_pos"]
+                            pb_orig = self.atoms[bi]["orig_pos"]
+                            bond_vec = pb_orig - pa_orig
+                            bond_len = np.linalg.norm(bond_vec)
+                            
+                            if bond_len > 1e-6:
+                                bond_dir = bond_vec / bond_len
+                                freq = 2.0 + b_idx * 1.5
+                                phase = t * freq
+                                
+                                # Move along bond
+                                direction = 1.0 if i == ai else -1.0
+                                stretch_amp = 0.04 * math.sin(phase)
+                                pos += bond_dir * stretch_amp * direction
+                            break
+            
+            # Special H2O vibrational modes
+            if self.molecule_name == "H2O" and elem == "H":
+                # Determine which H atom (1st or 2nd hydrogen)
+                is_first_h = (i == 1)
+                h_sign = 1.0 if is_first_h else -1.0  # Opposite phase for symmetric modes
+                
+                # === BENDING (SCISSORING) ===
+                if vib_mode in ["All", "Bending"] and o_pos is not None:
+                    rel_vec = pos - o_pos
+                    if np.linalg.norm(rel_vec) > 1e-6:
+                        rel_dir = rel_vec / np.linalg.norm(rel_vec)
+                        bend_amp = 0.08 * math.sin(t * 3.5)
+                        pos += rel_dir * bend_amp * h_sign
+                
+                # === ROCKING ===
+                if vib_mode in ["All", "Rocking"]:
+                    rock_amp = 0.06 * math.sin(t * 1.8)
+                    pos[0] += rock_amp
+                
+                # === WAGGING ===
+                if vib_mode in ["All", "Wagging"]:
+                    wag_amp = 0.07 * math.sin(t * 2.5)
+                    pos[2] += wag_amp
+                
+                # === TWISTING ===
+                if vib_mode in ["All", "Twisting"]:
+                    twist_amp = 0.08 * math.sin(t * 4.2)
+                    pos[2] += twist_amp * h_sign
+            
+            animated_positions.append(pos)
+        
+        return animated_positions
+
+
 
     def _bond_transform(self, pa, pb):
         """Đặt cylinder (mặc định dựng dọc +Y, cao = 1) nối từ pa đến pb.
@@ -175,21 +293,27 @@ class MoleculeModel:
 
 
     def draw(self, projection, view, model):
-        # Optional global transform for molecule animation
-        if self.animate:
-            # small rotation around Y
-            model = model @ rotate(self.time * 20.0, [0.0, 1.0, 0.0])
+        # Lấy vị trí động (đã tính các mode dao động)
+        animated_positions = self.get_animated_positions()
+        
+        # Nếu bật animation → quay nhẹ toàn phân tử quanh trục Y (hiệu ứng đẹp)
+        #if self.animate:
+            #rotation_matrix = rotate(axis=[0.0, 1.0, 0.0], angle=self.time * 20.0)
+            #model = model @ rotation_matrix
 
-        # 1) Draw bonds (behind) — cylinders
+        # =============================
+        # 1️⃣ VẼ LIÊN KẾT (BONDS)
+        # =============================
         for b in self.bonds:
             ai, bi = b["a"], b["b"]
-            pa = self.atoms[ai]["pos"]; ea = self.atoms[ai]["elem"]
-            pb = self.atoms[bi]["pos"]; eb = self.atoms[bi]["elem"]
+            pa = animated_positions[ai]
+            pb = animated_positions[bi]
+            ea = self.atoms[ai]["elem"]
+            eb = self.atoms[bi]["elem"]
 
-            # rút ngắn 2 đầu theo bán kính atom để cylinder chỉ chạm vỏ cầu
+            # Rút ngắn 2 đầu để cylinder chỉ chạm vỏ cầu
             ra = self.atom_radius.get(ea, 0.2)
             rb = self.atom_radius.get(eb, 0.2)
-
             v = pb - pa
             L = float(np.linalg.norm(v))
             if L > 1e-6:
@@ -199,13 +323,34 @@ class MoleculeModel:
             else:
                 pa2, pb2 = pa, pb
 
-            M = self._bond_transform(pa2, pb2)
+            # =============================
+            # FIX: Giữ hướng bond theo hướng gốc
+            # =============================
+            orig_pa = self.atoms[ai]["orig_pos"]
+            orig_pb = self.atoms[bi]["orig_pos"]
+
+            # Hướng và chiều dài gốc
+            orig_vec = orig_pb - orig_pa
+            orig_len = np.linalg.norm(orig_vec)
+
+            # Chiều dài hiện tại để co giãn
+            curr_len = np.linalg.norm(pb2 - pa2)
+            scale_factor = curr_len / orig_len if orig_len > 1e-6 else 1.0
+
+            # Dựng bond theo hướng gốc, chỉ scale chiều dài
+            M = self._bond_transform(orig_pa, orig_pb)
+            S_fix = scale([1.0, scale_factor, 1.0])
+            M = M @ S_fix
+
             b["obj"].draw(projection, view, model @ M)
 
-
-        # 2) Draw atoms — spheres with per-element radius
-        for a in self.atoms:
+        # =============================
+        # 2️⃣ VẼ NGUYÊN TỬ (ATOMS)
+        # =============================
+        for i, a in enumerate(self.atoms):
             elem = a["elem"]
             r = self.atom_radius.get(elem, 0.2)
-            M = translate(a["pos"]) @ scale([r, r, r])
+            anim_pos = animated_positions[i]
+            M = translate(anim_pos) @ scale([r, r, r])
             a["obj"].draw(projection, view, model @ M)
+

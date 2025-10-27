@@ -563,27 +563,30 @@ class Viewer:
             except Exception as e:
                 print(f"Error creating shape: {e}")
                 pass
-        if not needs_recreate:
-            return
-        # --- Update transform ---
-        s = self.state
-       
-        transform = (
-    translate(s.translate)
-    @ rotate(axis=[1, 0, 0], angle=s.rotate[0])
-    @ rotate(axis=[0, 1, 0], angle=s.rotate[1])
-    @ rotate(axis=[0, 0, 1], angle=s.rotate[2])
-    @ scale(s.scale)
-)
-
+        
+        # --- LUÔN update transform và color (mỗi frame) ---
         if self._managed_drawable:
+            s = self.state
+           
+            # Tính transform matrix
+            # Thứ tự: Scale → Rotate → Translate
+            # (trong code, đọc từ phải sang trái do matrix multiplication)
+            transform = (
+                translate(s.translate)
+                @ rotate(axis=[1, 0, 0], angle=s.rotate[0])
+                @ rotate(axis=[0, 1, 0], angle=s.rotate[1])
+                @ rotate(axis=[0, 0, 1], angle=s.rotate[2])
+                @ scale(s.scale)
+            )
+            
             self._managed_drawable.transform = transform
-        # --- Apply flat color if in Flat mode ---
-        if s.render_modes[s.render_mode_idx] == "Flat":
-            if hasattr(self._managed_drawable, "color"):
-                self._managed_drawable.color = s.color
-            elif hasattr(self._managed_drawable, "set_color"):
-                self._managed_drawable.set_color(s.color)
+            
+            # --- Apply flat color if in Flat mode ---
+            if s.render_modes[s.render_mode_idx] == "Flat":
+                if hasattr(self._managed_drawable, "color"):
+                    self._managed_drawable.color = s.color
+                elif hasattr(self._managed_drawable, "set_color"):
+                    self._managed_drawable.set_color(s.color)
 
 
     # --- Event handling ---

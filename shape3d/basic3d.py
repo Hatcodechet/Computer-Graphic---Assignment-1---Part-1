@@ -54,7 +54,7 @@ class Cube(object):
 
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
-        #
+        self.transform = np.eye(4)
 
     """
     Create object -> call setup -> call draw
@@ -73,10 +73,13 @@ class Cube(object):
 
     def draw(self, projection, view, model):
         GL.glUseProgram(self.shader.render_idx)
-        modelview = view
+        
+        if model is None:
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glDrawElements(GL.GL_TRIANGLE_STRIP, self.indices.shape[0], GL.GL_UNSIGNED_INT, None)
@@ -136,14 +139,29 @@ class Sphere(object):
                 indices += [first, second, first + 1, second, second + 1, first + 1]
         self.indices = np.array(indices, dtype=np.uint32)
 
-        # ----- 3. Màu mặc định (white) -----
-        self.colors = np.abs(self.vertices)
+        # ----- 3. Tạo màu sáng và đẹp (gradient từ vertices) -----
+        # Normalize vertices để có range [-1, 1]
+        colors = []
+        for v in vertices:
+            x, y, z = v
+            # Tạo màu gradient dựa trên vị trí
+            # Chuyển đổi từ [-1, 1] sang [0, 1]
+            r = (x + 1.0) / 2.0  # X: đỏ
+            g = (y + 1.0) / 2.0  # Y: xanh lá  
+            b = (z + 1.0) / 2.0  # Z: xanh dương
+            # Làm sáng thêm bằng cách thêm một chút base color
+            r = 0.5 + 0.5 * r
+            g = 0.5 + 0.5 * g
+            b = 0.5 + 0.5 * b
+            colors.append([r, g, b])
+        self.colors = np.array(colors, dtype=np.float32)
 
         # ----- 4. Shader + Uniform manager + VAO -----
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
         self.vao = VAO()
         self.texture_id = None
+        self.transform = np.eye(4)
 
         if self.texture_path:
             self.load_texture(self.texture_path)
@@ -162,10 +180,13 @@ class Sphere(object):
     def draw(self, projection, view, model):
         """Vẽ sphere với shader hiện tại"""
         GL.glUseProgram(self.shader.render_idx)
-        modelview = view if model is None else view @ model
+        
+        if model is None:
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, "projection", True)
-        self.uma.upload_uniform_matrix4fv(modelview, "modelview", True)
+        self.uma.upload_uniform_matrix4fv(model, "model", True)
+        self.uma.upload_uniform_matrix4fv(view, "view", True)
 
         # Gắn texture nếu có
         if self.texture_id:
@@ -275,6 +296,7 @@ class Cone(object):
         self.vao = VAO()
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
+        self.transform = np.eye(4)
 
     # ---------------------------------------------------------
     def setup(self):
@@ -291,12 +313,11 @@ class Cone(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -393,12 +414,11 @@ class ConeFan(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -491,6 +511,7 @@ class Cylinder(object):
         self.vao = VAO()
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
+        self.transform = np.eye(4)
 
     # ---------------------------------------------------------
     def setup(self):
@@ -508,12 +529,11 @@ class Cylinder(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -618,6 +638,10 @@ class Tetrahedron(object):
             [0.0, 0.0, 1.0],  # Xanh dương
             [1.0, 1.0, 0.0],  # Vàng
         ], dtype=np.float32)
+        
+        # ---- Tính normals cho mỗi vertex ----
+        self.normals = self._calculate_normals()
+        
         # ---- Texture setup ----
         self.texcoords = np.zeros((len(self.vertices), 2), dtype=np.float32)
         self.texture_id = None
@@ -628,6 +652,42 @@ class Tetrahedron(object):
         self.shader = Shader(vert_shader, frag_shader)
         self.uma = UManager(self.shader)
         self.transform = np.eye(4)
+
+    def _calculate_normals(self):
+        """Tính normal cho mỗi vertex bằng cách gộp normals của các faces chứa nó"""
+        # Khởi tạo normal array
+        vertex_normals = np.zeros_like(self.vertices)
+        
+        # Duyệt qua mỗi face (triangle)
+        for i in range(0, len(self.indices), 3):
+            i0, i1, i2 = self.indices[i], self.indices[i+1], self.indices[i+2]
+            
+            # Lấy 3 vertices của triangle
+            v0 = self.vertices[i0]
+            v1 = self.vertices[i1]
+            v2 = self.vertices[i2]
+            
+            # Tính 2 cạnh
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            
+            # Cross product để có face normal
+            face_normal = np.cross(edge1, edge2)
+            
+            # Normalize
+            face_normal = face_normal / (np.linalg.norm(face_normal) + 1e-8)
+            
+            # Cộng normal vào các vertices của face này
+            vertex_normals[i0] += face_normal
+            vertex_normals[i1] += face_normal
+            vertex_normals[i2] += face_normal
+        
+        # Normalize lại tất cả vertex normals
+        norms = np.linalg.norm(vertex_normals, axis=1, keepdims=True)
+        norms[norms < 1e-8] = 1.0  # Tránh chia 0
+        vertex_normals = vertex_normals / norms
+        
+        return vertex_normals
 
     def setup(self):
         self.vao.add_vbo(0, self.vertices, ncomponents=3, stride=0, offset=None)
@@ -643,12 +703,11 @@ class Tetrahedron(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -770,12 +829,11 @@ class Cylinder2(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -904,12 +962,11 @@ class Torus(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -1048,12 +1105,11 @@ class Prism(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)

@@ -1,10 +1,11 @@
 #version 330 core
-in vec3 v_position;
-in vec3 v_normal;
+in vec3 v_position;  // World space position
+in vec3 v_normal;    // World space normal
 in vec3 v_color;
 
 out vec4 fragColor;
 
+// Light and view positions in world space
 uniform vec3 light_pos = vec3(3.0, 3.0, 3.0);
 uniform vec3 view_pos = vec3(0.0, 0.0, 5.0);
 uniform float ka = 0.1;

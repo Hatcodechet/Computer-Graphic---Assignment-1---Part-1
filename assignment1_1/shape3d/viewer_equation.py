@@ -210,7 +210,9 @@ class ViewerEquation:
                         GL.glDeleteBuffers(2, [vbo_pos, vbo_col])
                         GL.glDeleteVertexArrays(1, [vao])
                 else:
+                    pass
                     # Nếu không có critical points, vẽ điểm tâm (0,0) như mặc định
+                    """
                     try:
                         z0 = float(ne.evaluate(self.state.func_str, local_dict={'x': 0.0, 'y': 0.0}))
                     except Exception:
@@ -242,7 +244,7 @@ class ViewerEquation:
 
                     GL.glDeleteBuffers(2, [vbo_pos, vbo_col])
                     GL.glDeleteVertexArrays(1, [vao])
-
+"""
             else:
                 # Chế độ 2D Contour
                 self.show_contour()
@@ -295,9 +297,9 @@ class ViewerEquation:
                 "expr": "100*(y - x**2)**2 + (1 - x)**2",
                 "x_range": [-2.0, 2.0],
                 "y_range": [-1.0, 3.0],
-                "critical_points": [
-                    (1.0, 1.0, "#00FF00", "Global Min")  # điểm (1,1) là cực tiểu
-                ]
+                #"critical_points": [
+                   # (1.0, 1.0, "#00FF00", "Global Min")  # điểm (1,1) là cực tiểu
+                #]
             },
             {
                 "name": "Quadratic Bowl",

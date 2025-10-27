@@ -27,7 +27,11 @@ class UIState:
         # Molecule (Ball-and-Stick)
         self.molecules = ["H2O", "CO2"]
         self.mol_idx = 0
-        self.animate_molecule = False  # (optional) rung/rotate
+        self.animate_molecule = False  # animation toggle
+
+        # vibration modes
+        self.vibration_modes = ["All", "Stretching", "Bending", "Rocking", "Wagging", "Twisting"]
+        self.vibration_mode_idx = 0
 
         # Common
         self.show_axes = True
@@ -58,8 +62,8 @@ class Viewer:
         self.trackball = Trackball()
         self.state = UIState()
         self.axes = Axes(
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.vert",
+            "/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.frag",
             length=2.0
         ).setup()
 
@@ -97,7 +101,6 @@ class Viewer:
             if self.state.show_axes:
                 self.axes.draw(projection, view, np.eye(4))
 
-            # Draw according to mode
             if self.state.mode_idx == 0 and self.atom_model:
                 self.atom_model.draw(projection, view, np.eye(4))
             if self.state.mode_idx == 1 and self.molecule_model:
@@ -112,7 +115,7 @@ class Viewer:
 
     def render_ui(self):
         imgui.set_next_window_position(10, 10)
-        imgui.set_next_window_size(340, 260)
+        imgui.set_next_window_size(340, 300)
         imgui.begin("Controls", True)
 
         imgui.text("Mode:")
@@ -120,19 +123,22 @@ class Viewer:
         imgui.separator()
 
         if self.state.mode_idx == 0:
-            # Atom (Bohr)
             imgui.text("Atom (Bohr Model)")
             _, self.state.atom_idx = imgui.combo("##atom", self.state.atom_idx, self.state.atoms)
             current_atom = self.state.atoms[self.state.atom_idx]
             imgui.text(f"Current Atom: {current_atom}")
             _, self.state.animate_electron = imgui.checkbox("Animate Electrons", self.state.animate_electron)
         else:
-            # Molecule (Ball-and-Stick)
             imgui.text("Molecule (Ball-and-Stick)")
             _, self.state.mol_idx = imgui.combo("##molecule", self.state.mol_idx, self.state.molecules)
             current_mol = self.state.molecules[self.state.mol_idx]
             imgui.text(f"Current Molecule: {current_mol}")
-            _, self.state.animate_molecule = imgui.checkbox("Animate Molecule (optional)", self.state.animate_molecule)
+            _, self.state.animate_molecule = imgui.checkbox("Animate Molecule", self.state.animate_molecule)
+
+            imgui.text("Vibration Mode:")
+            _, self.state.vibration_mode_idx = imgui.combo(
+                "##vibmode", self.state.vibration_mode_idx, self.state.vibration_modes
+            )
 
         imgui.separator()
         _, self.state.show_axes = imgui.checkbox("Show Axes", self.state.show_axes)
@@ -140,42 +146,42 @@ class Viewer:
 
     def update_scene(self, delta_time):
         if self.state.mode_idx == 0:
-            # Atom mode
             atom_name = self.state.atoms[self.state.atom_idx]
             if self.atom_model is None or self.atom_model.atom_name != atom_name:
                 self.atom_model = AtomModel(
                     atom_name=atom_name,
-                    vert_shader="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                    frag_shader="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                    vert_shader="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.vert",
+                    frag_shader="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.frag",
                     animate=self.state.animate_electron
                 ).setup()
             self.atom_model.animate = self.state.animate_electron
             self.atom_model.update(delta_time)
-            # release molecule model when not used (optional)
             self.molecule_model = None
 
         else:
-            # Molecule mode
             mol_name = self.state.molecules[self.state.mol_idx]
             if self.molecule_model is None or self.molecule_model.molecule_name != mol_name:
                 self.molecule_model = MoleculeModel(
                     molecule_name=mol_name,
-                    # solid color shaders — see below
                     solid_vert="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/atom/shaders/solid.vert",
                     solid_white="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/atom/shaders/solid_white.frag",
                     solid_red="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/atom/shaders/solid_red.frag",
                     solid_black="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/atom/shaders/solid_black.frag",
                     solid_gray="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/atom/shaders/solid_gray.frag",
-                    gouraud_vert="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.vert",
-                    gouraud_frag="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/main/gouraud.frag",
+                    gouraud_vert="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.vert",
+                    gouraud_frag="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/gouraud.frag",
+                    phong_vert="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/phong.vert",
+                    phong_frag="/Users/phamnguyenviettri/Ses251/ComputerGraphic/tostudents/assignment1_1/shape3d/shaders/phong.frag",
                     animate=self.state.animate_molecule
                 ).setup()
+
+            # cập nhật mode dao động
+            self.molecule_model.vibration_mode = self.state.vibration_modes[self.state.vibration_mode_idx]
             self.molecule_model.animate = self.state.animate_molecule
             self.molecule_model.update(delta_time)
-            # release atom model when not used (optional)
             self.atom_model = None
 
-    # input handlers...
+    # input handlers
     def on_key(self, win, key, scancode, action, mods):
         if action in (glfw.PRESS, glfw.REPEAT):
             if key in (glfw.KEY_ESCAPE, glfw.KEY_Q):

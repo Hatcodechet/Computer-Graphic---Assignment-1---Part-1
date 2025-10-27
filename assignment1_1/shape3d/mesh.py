@@ -21,6 +21,8 @@ class EquationSurface(object):
         z_values = ne.evaluate(expr_str, local_dict={'x': grid[:, 0], 'y': grid[:, 1]})
         grid[:, 2] = z_values
         self.vertices = grid
+        z_scale = 0.8  # hoặc 5.0 nếu bạn muốn mặt lồi lên rõ hơn
+        self.vertices[:, 2] *= z_scale
 
         # --- 3. Tạo indices
         indices = []
@@ -62,10 +64,13 @@ class EquationSurface(object):
     def draw(self, projection, view, model):
         """Vẽ bề mặt"""
         GL.glUseProgram(self.shader.render_idx)
-        modelview = view if model is None else view @ model
+        
+        if model is None:
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, "projection", True)
-        self.uma.upload_uniform_matrix4fv(modelview, "modelview", True)
+        self.uma.upload_uniform_matrix4fv(model, "model", True)
+        self.uma.upload_uniform_matrix4fv(view, "view", True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)

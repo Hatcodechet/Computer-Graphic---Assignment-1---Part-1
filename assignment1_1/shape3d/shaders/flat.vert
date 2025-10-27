@@ -5,9 +5,11 @@ layout(location = 1) in vec3 a_color;
 out vec3 v_color;
 
 uniform mat4 projection;
-uniform mat4 modelview;
+uniform mat4 model;
+uniform mat4 view;
 
 void main() {
+    mat4 modelview = view * model;
     gl_Position = projection * modelview * vec4(a_position, 1.0);
     v_color = a_color;
 }

@@ -66,12 +66,11 @@ class Axes(object):
         GL.glUseProgram(self.shader.render_idx)
 
         if model is None:
-            modelview = view
-        else:
-            modelview = view @ model
+            model = np.eye(4, dtype=np.float32)
 
         self.uma.upload_uniform_matrix4fv(projection, 'projection', True)
-        self.uma.upload_uniform_matrix4fv(modelview, 'modelview', True)
+        self.uma.upload_uniform_matrix4fv(model, 'model', True)
+        self.uma.upload_uniform_matrix4fv(view, 'view', True)
 
         self.vao.activate()
         GL.glEnable(GL.GL_DEPTH_TEST)
